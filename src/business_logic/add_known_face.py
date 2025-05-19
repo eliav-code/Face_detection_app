@@ -21,7 +21,6 @@ class FaceAdder:
         cap = cv2.VideoCapture(0)
         ret, frame = cap.read()
         cap.release()
-        print("hello")
 
         if not ret:
             self.update_status("Error capturing frame.")

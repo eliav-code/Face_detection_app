@@ -70,7 +70,7 @@ class FaceAdder:
         """
         # Check for duplicates
         if self.is_duplicate_face(face_encoding, known_encodings):
-            return False, "This face is already in the database"
+            return False, "This face is already in the database!"
 
         # Generate name if not provided
         if not name:

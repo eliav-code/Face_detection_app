@@ -1,3 +1,6 @@
+from ctypes import alignment
+from multiprocessing.pool import CLOSE
+from re import L
 import flet as ft
 import cv2
 import base64
@@ -38,6 +41,19 @@ class FaceRecognitionApp:
         # Face count display
         self.face_count_text = ft.Text(f"Known faces: {len(self.known_face_encodings)}", size=14)
 
+        # Add instructions for the app
+        self.instructions_dialog = ft.AlertDialog(
+            title=ft.Text("Information about the app:"),
+            content=self.info_text(),
+            actions=[ft.ElevatedButton("Close dialog", icon=ft.icons.CLOSE, on_click=self.close_dialog)],
+            modal=False # The dialog enable the use of the rest of the page.
+        )
+        self.help_icon_button = ft.IconButton(
+            icon=ft.icons.HELP_OUTLINE,
+            tooltip="Press for instructions",
+            on_click=self.open_dialog
+        )
+
         self.build_ui()
         self.page.window.on_event = self.on_window_event
 
@@ -50,22 +66,47 @@ class FaceRecognitionApp:
         self.page.add(
             ft.Column([
                 ft.Row([
+                    ft.Text(
+                        value="Face detector app", 
+                        size=50,
+                        weight=ft.FontWeight.W_900,
+                        selectable=True)
+                ], alignment="center"),
+                ft.Container(self.image_display, alignment=ft.alignment.center),
+                ft.Row([
                     self.start_button, 
                     self.add_face_button
                 ], alignment="center"),
                 ft.Row([
                     self.name_input
                 ], alignment="center"),
-                ft.Container(self.image_display, alignment=ft.alignment.center),
                 self.status_text,
                 self.face_count_text,
                 ft.Divider(),
-                ft.Text("Instructions:", weight="bold"),
-                ft.Text("• Start Camera: Begin face recognition", size=12),
-                ft.Text("• Add Known Face: Capture and save a new face", size=12),
-                ft.Text("• Green box = Recognized, Red box = Unknown", size=12),
+                ft.Row([
+                    self.help_icon_button
+                ], ft.MainAxisAlignment.END)
+                
             ], alignment="center")
         )
+
+    def open_dialog(self, e):
+        self.instructions_dialog.open = True
+        self.page.dialog = self.instructions_dialog
+        self.page.update()
+
+    def info_text(self):
+        return ft.Column([
+            ft.Text("Instructions:", weight="bold"),
+            ft.Text("• Start Camera: Begin face recognition", size=14),
+            ft.Text("• Add Known Face: Capture and save a new face", size=14),
+            ft.Text("• Green box = Recognized, Red box = Unknown", size=14),
+        ])
+    
+    def close_dialog(self, e):
+        self.instructions_dialog.open = False
+        self.page.update()
+
 
     def update_status_text(self, message):
         """Update status text and refresh UI"""
@@ -162,6 +203,8 @@ class FaceRecognitionApp:
 
         cap.release()
         self.update_status_text("Camera stopped.")
+        time.sleep(3)
+        self.update_status_text("Click a button to begin.")
 
     def start_camera_click(self, e):
         """Handle start/stop camera button click"""
@@ -198,6 +241,8 @@ class FaceRecognitionApp:
             )
             
             self.update_status_text(message)
+            time.sleep(3)
+            self.update_status_text("Click a button to begin.")
             
             if success:
                 # Update UI elements
@@ -219,10 +264,3 @@ class FaceRecognitionApp:
                 self.face_adder.save_known_faces(self.known_face_encodings, self.known_face_names)
             except Exception as ex:
                 print(f"Error saving faces on close: {ex}")
-
-def main(page: ft.Page):
-    FaceRecognitionApp(page)
-
-if __name__ == "__main__":
-    import flet as ft
-    ft.app(target=main)

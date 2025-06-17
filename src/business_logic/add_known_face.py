@@ -185,8 +185,8 @@ class FaceAdder:
             except Exception as e:
                 return False, f"Error saving after deletion: {str(e)}"
         except Exception as e:
-            logger.error("This name is not in knows_names list!")
-            return False, "This name is not in knows_names list!"
+            logger.error(f"{name} is not in knows_names list!")
+            return False, f"{name} is not in knows_names list!"
 
     def list_known_faces(self):
         """

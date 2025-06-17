@@ -26,16 +26,16 @@ class FaceRecognitionApp:
         self.known_face_names = []
 
         # UI elements
-        self.status_text = ft.Text("Click a button to begin.", size=16)
+        self.status_text = ft.Text("Click a button to begin.", size=16, selectable=True)
         self.image_display = ft.Image(src="", width=640, height=360, fit="CONTAIN")
         self.start_button = ft.ElevatedButton("Start Camera", on_click=self.start_camera_click)
-        self.add_face_button = ft.ElevatedButton("Add Known Face", on_click=self.add_face_click)
+        
 
         # Delete face UI
         self.name_input_to_delete = ft.TextField(label="Enter name to delete")
         self.delete_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Delete known face"),
+            title=ft.Text("Delete known face", selectable=True),
             content=self.name_input_to_delete,
             actions=[
                 ft.TextButton("Cancel", on_click=self.close_delete_dialog),
@@ -44,19 +44,30 @@ class FaceRecognitionApp:
         )
         self.delete_face_button = ft.ElevatedButton("Delete known face", on_click=self.delete_face_click)
 
-        # Input field for person's name
-        self.name_input = ft.TextField(
+        # Add face UI
+        self.name_input_to_add = ft.TextField(
             label="Person's Name (optional)",
             width=200,
             value=""
         )
 
+        self.add_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Add unknown face", selectable=True),
+            content=self.name_input_to_add,
+            actions=[
+                ft.TextButton("Cancel", on_click=self.close_add_dialog),
+                ft.TextButton("Submit", on_click=self.submit_adding)
+            ]
+        )
+        self.add_face_button = ft.ElevatedButton("Add Known Face", on_click=self.add_face_click)
+
         # Face count display
-        self.face_count_text = ft.Text(f"Known faces: {len(self.known_face_encodings)}", size=14)
+        self.face_count_text = ft.Text(f"Known faces: {len(self.known_face_encodings)}", size=14, selectable=True)
 
         # Add instructions for the app
         self.instructions_dialog = ft.AlertDialog(
-            title=ft.Text("Information about the app:"),
+            title=ft.Text("Information about the app:", selectable=True),
             content=self.info_text(),
             actions=[ft.ElevatedButton("Close dialog", icon=ft.icons.CLOSE, on_click=self.close_help_dialog)],
             modal=False # The dialog enable the use of the rest of the page.
@@ -91,9 +102,6 @@ class FaceRecognitionApp:
                     self.add_face_button,
                     self.delete_face_button
                 ], alignment="center"),
-                ft.Row([
-                    self.name_input
-                ], alignment="center"),
                 self.status_text,
                 self.face_count_text,
                 ft.Divider(),
@@ -103,24 +111,6 @@ class FaceRecognitionApp:
                 
             ], alignment="center")
         )
-
-    def open_help_dialog(self, e):
-        self.instructions_dialog.open = True
-        self.page.dialog = self.instructions_dialog
-        self.page.update()
-
-    def info_text(self):
-        return ft.Column([
-            ft.Text("Instructions:", weight="bold"),
-            ft.Text("• Start Camera: Begin face recognition", size=14),
-            ft.Text("• Add Known Face: Capture and save a new face", size=14),
-            ft.Text("• Green box = Recognized, Red box = Unknown", size=14),
-        ])
-    
-    def close_help_dialog(self, e):
-        self.instructions_dialog.open = False
-        self.page.update()
-
 
     def update_status_text(self, message):
         """Update status text and refresh UI"""
@@ -235,6 +225,61 @@ class FaceRecognitionApp:
             self.image_display.src_base64 = ""  # Clear image on stop
             self.page.update()
 
+    def add_face_click(self, e):
+        """Handle add face button click"""
+        if self.camera_running:
+            self.update_status_text("Please stop the camera before adding a new face.")
+            return
+        
+        self.page.dialog = self.add_dialog
+        self.add_dialog.open = True
+        self.page.update()
+
+    def close_add_dialog(self, e):
+        # Close the dialog and return to the previous window
+        self.name_input_to_add.value = ""
+        self.add_dialog.open = False
+        self.page.update()
+
+    def submit_adding(self, e):
+        """
+        Function for submit adding new face to db
+        """
+        # Close the dialog
+        self.add_dialog.open = False
+        self.page.update()
+
+        self.update_status_text("Capturing face... Please look at the camera.")
+        
+        # Get the name from input field
+        name = self.name_input_to_add.value.strip() if self.name_input_to_add.value.strip() else None
+        
+        ## TODO - Must to write name(no optional). Add check if self.name_input.value is not empty string.
+
+        # Use business logic to add face
+        try:
+            success, message = self.face_adder.capture_and_add_face(
+                name=name,
+                known_encodings=self.known_face_encodings, 
+                known_names=self.known_face_names
+            )
+            
+            self.update_status_text(message)
+
+            if success:
+                # Update UI elements
+                self.update_face_count()
+
+            # Clear name input
+            self.name_input_to_add.value = ""
+            self.page.update()
+
+            time.sleep(3)
+            self.update_status_text("Click a button to begin.")
+                
+        except Exception as e:
+            self.update_status_text(f"Error adding face: {str(e)}")
+
 
     def delete_face_click(self, e):
         """
@@ -246,10 +291,14 @@ class FaceRecognitionApp:
 
     def close_delete_dialog(self, e):
         # Close the dialog and return to the previous window
+        self.name_input_to_delete.value = ""
         self.delete_dialog.open = False
         self.page.update()
 
     def submit_deleting(self, e):
+        """
+        Submit deleting known face from db
+        """
         # Close the dialog
         self.delete_dialog.open = False
         self.page.update()
@@ -272,43 +321,12 @@ class FaceRecognitionApp:
         
         if success:
             self.update_face_count()
-
-
-    def add_face_click(self, e):
-        """Handle add face button click"""
-        if self.camera_running:
-            self.update_status_text("Please stop the camera before adding a new face.")
-            return
-
-        self.update_status_text("Capturing face... Please look at the camera.")
         
-        # Get the name from input field
-        name = self.name_input.value.strip() if self.name_input.value.strip() else None
-        
-        ## TODO - Must to write name(no optional). Add check if self.name_input.value is not empty string.
+        time.sleep(3)
 
-        # Use business logic to add face
-        try:
-            success, message = self.face_adder.capture_and_add_face(
-                name=name,
-                known_encodings=self.known_face_encodings, 
-                known_names=self.known_face_names
-            )
-            
-            self.update_status_text(message)
-
-            if success:
-                # Update UI elements
-                self.update_face_count()
-                # Clear name input
-                self.name_input.value = ""
-                self.page.update()
-
-            time.sleep(3)
-            self.update_status_text("Click a button to begin.")
-                
-        except Exception as e:
-            self.update_status_text(f"Error adding face: {str(e)}")
+        # Reset name_input_to_delete value
+        self.name_input_to_delete.value = ""
+        self.update_status_text("Click a button to begin.")
 
     def on_window_event(self, e: ft.WindowEvent):
         """Handle window events"""
@@ -320,3 +338,21 @@ class FaceRecognitionApp:
                 self.face_adder.save_known_faces(self.known_face_encodings, self.known_face_names)
             except Exception as ex:
                 print(f"Error saving faces on close: {ex}")
+    
+    def open_help_dialog(self, e):
+        self.instructions_dialog.open = True
+        self.page.dialog = self.instructions_dialog
+        self.page.update()
+
+    def info_text(self):
+        return ft.Column([
+            ft.Text("Instructions:", weight="bold", selectable=True),
+            ft.Text("• Start Camera: Begin face recognition", size=14, selectable=True),
+            ft.Text("• Add new Face: Capture and save a new face", size=14, selectable=True),
+            ft.Text("• Delete known face: Enter the name you want to delete from db", size=14, selectable=True),
+            ft.Text("• Green box = Recognized, Red box = Unknown", size=14, selectable=True),
+        ])
+    
+    def close_help_dialog(self, e):
+        self.instructions_dialog.open = False
+        self.page.update()

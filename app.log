@@ -3,3 +3,8 @@
 2025-06-17 16:30:24,312 - ERROR - src.business_logic.add_known_face - This name is not in knows_names list!
 2025-06-17 16:30:51,311 - ERROR - src.business_logic.add_known_face - This name is not in knows_names list!
 2025-06-17 16:44:09,761 - ERROR - src.business_logic.add_known_face - This name is not in knows_names list!
+2025-06-17 23:01:05,851 - ERROR - src.business_logic.add_known_face - This name is not in knows_names list!
+2025-06-17 23:01:47,616 - ERROR - src.business_logic.add_known_face - E is not in knows_names list!
+2025-06-17 23:07:03,881 - ERROR - src.business_logic.add_known_face - E is not in knows_names list!
+2025-06-17 23:07:35,151 - ERROR - src.business_logic.add_known_face - E is not in knows_names list!
+2025-06-17 23:09:12,983 - ERROR - src.business_logic.add_known_face - E is not in knows_names list!

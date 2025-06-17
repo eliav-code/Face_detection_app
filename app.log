@@ -1,0 +1,5 @@
+2025-06-17 15:06:24,526 - INFO - src.business_logic.add_known_face - The norm distances between all known faces and compared face is [0.31194275 0.60906508]
+2025-06-17 16:23:50,829 - ERROR - src.business_logic.add_known_face - This name is not in knows_names list!
+2025-06-17 16:30:24,312 - ERROR - src.business_logic.add_known_face - This name is not in knows_names list!
+2025-06-17 16:30:51,311 - ERROR - src.business_logic.add_known_face - This name is not in knows_names list!
+2025-06-17 16:44:09,761 - ERROR - src.business_logic.add_known_face - This name is not in knows_names list!

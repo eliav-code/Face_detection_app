@@ -1,11 +1,15 @@
+from typing import List, Any, Tuple
 import face_recognition
 import numpy as np
 import cv2
 import pickle
 import os
+from config import setup_logger
+
+logger = setup_logger(__name__)
 
 class FaceAdder:
-    def __init__(self, data_file="known_faces.pkl", tolerance=0.6):
+    def __init__(self, data_file="known_faces.pkl", tolerance=0.4):
         """
         Initialize FaceAdder with configuration
         
@@ -25,9 +29,10 @@ class FaceAdder:
         """
         if not known_encodings:
             return False
-        
+
         distances = face_recognition.face_distance(known_encodings, new_encoding)
-        return np.any(distances <= self.tolerance)
+        logger.info(f"The norm distances between all known faces and compared face is {distances}")
+        return np.any(distances <= self.tolerance) # If there is at least one face that his difference is less than tolerance the compared face is familiar.
 
     def capture_face_from_camera(self):
         """
@@ -82,7 +87,7 @@ class FaceAdder:
 
         return True, f"Face added successfully as '{name}'"
 
-    def capture_and_add_face(self, name, known_encodings, known_names):
+    def capture_and_add_face(self, name : str, known_encodings : List[Any], known_names : List[str]):
         """
         Complete process: capture face from camera and add to database
         
@@ -160,7 +165,7 @@ class FaceAdder:
         encodings, _ = self.load_known_faces()
         return len(encodings)
 
-    def delete_face(self, index, known_encodings, known_names):
+    def delete_face(self, name : str, known_encodings : List, known_names : List[str]) -> Tuple[bool, str]:
         """
         Delete a face from the database by index
         
@@ -169,8 +174,8 @@ class FaceAdder:
         :param known_names: List of known face names
         :return: Tuple (success, message)
         """
-        if 0 <= index < len(known_encodings):
-            name = known_names[index]
+        try:
+            index = known_names.index(name)
             del known_encodings[index]
             del known_names[index]
             
@@ -179,8 +184,9 @@ class FaceAdder:
                 return True, f"Deleted face '{name}' successfully"
             except Exception as e:
                 return False, f"Error saving after deletion: {str(e)}"
-        else:
-            return False, "Invalid face index"
+        except Exception as e:
+            logger.error("This name is not in knows_names list!")
+            return False, "This name is not in knows_names list!"
 
     def list_known_faces(self):
         """

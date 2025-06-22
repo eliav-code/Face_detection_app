@@ -185,7 +185,7 @@ class FaceRecognitionApp:
                 # Choose color based on recognition
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)  # Green for known, Red for unknown
                 ## TODO - add sound for known and unknown face
-                play_wonderful_sound() if name != "Unknown" else play_siren_sound()
+                # play_wonderful_sound() if name != "Unknown" else play_siren_sound()
 
                 cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
                 

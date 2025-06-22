@@ -9,6 +9,7 @@ import time
 import face_recognition
 import numpy as np
 from src.business_logic.add_known_face import FaceAdder
+from src.utils.sound_player import SoundPlayer
 
 class FaceRecognitionApp:
     def __init__(self, page: ft.Page):
@@ -30,6 +31,9 @@ class FaceRecognitionApp:
         self.image_display = ft.Image(src="", width=640, height=360, fit="CONTAIN")
         self.start_button = ft.ElevatedButton("Start Camera", on_click=self.start_camera_click)
         
+        # Sound definitions
+        self.sound_player = SoundPlayer()
+        self.sound_player.start()
 
         # Delete face UI
         self.name_input_to_delete = ft.TextField(label="Enter name to delete")
@@ -184,8 +188,12 @@ class FaceRecognitionApp:
 
                 # Choose color based on recognition
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)  # Green for known, Red for unknown
-                ## TODO - add
-                # Draw rectangle around face
+                ## TODO - add sound for known and unknown face
+                
+                self.sound_player.queue_sound("wonderful") if name != "Unknown" else self.sound_player.queue_sound("siren")
+                    
+                # threading.Thread(target=play_wonderful_sound, daemon=True).start() if name != "Unknown" else threading.Thread(target=play_siren_sound, daemon=True).start()
+
                 cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
                 
                 # Draw label

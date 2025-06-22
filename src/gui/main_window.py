@@ -184,7 +184,7 @@ class FaceRecognitionApp:
 
                 # Choose color based on recognition
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)  # Green for known, Red for unknown
-                
+                ## TODO - add
                 # Draw rectangle around face
                 cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
                 

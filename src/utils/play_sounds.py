@@ -60,10 +60,10 @@ def main():
     # Example usage
     # play_siren_sound()
     # play_error_sound()
-    name = "mario"
+    name = "big-sur"
     play_success_sound(name=name)
-    time.sleep(1)
-    play_error_sound(name=name)
+    # time.sleep(1)
+    # play_error_sound(name=name)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 from ctypes import alignment
 from multiprocessing.pool import CLOSE
 from re import L
+from typing import Optional
+from venv import logger
 import flet as ft
 import cv2
 import base64
@@ -8,8 +10,13 @@ import threading
 import time
 import face_recognition
 import numpy as np
+from queue import Queue
+# import pygame
+import os
+
+from sympy import loggamma
 from src.business_logic.add_known_face import FaceAdder
-from src.utils.sound_player import play_siren_sound, play_wonderful_sound
+from src.utils.sound_player import play_sound_sync
 
 class FaceRecognitionApp:
     def __init__(self, page: ft.Page):
@@ -25,6 +32,19 @@ class FaceRecognitionApp:
         # Face recognition data - these will be managed by business logic
         self.known_face_encodings = []
         self.known_face_names = []
+
+        # # Sound initializations
+        # init_sound_system()
+
+        # Sound queue for non-blocking audio
+        self.sound_queue = Queue()
+        self.sound_thread = None
+        self.stop_sound_flag = threading.Event()
+
+        # Track last detection to avoid spam
+        self.last_detection_time = {}
+        self.detection_cooldown = 2.0 # In seconds
+
 
         # UI elements
         self.status_text = ft.Text("Click a button to begin.", size=16, selectable=True)
@@ -131,9 +151,53 @@ class FaceRecognitionApp:
         """Update the face count display"""
         self.face_count_text.value = f"Known faces: {len(self.known_face_encodings)}"
         self.page.update()
+    
 
-    def start_camera(self):
-        """Start camera stream with face recognition"""
+    def sound_worker(self) -> None:
+        """Worker thread for playing sounds without blocking main camera loop"""
+        while not self.stop_sound_flag.is_set():
+            try:
+                # Wait for sound request with timeout
+                if not self.sound_queue.empty():
+                    sound_type = self.sound_queue.get(timeout=0.1)
+                    play_sound_sync(sound_type)
+                else: # No sound insert into the queue
+                    time.sleep(0.1)
+            except Exception as e:
+                logger.error(f"Sound worker error: {e}")
+                raise
+
+
+    def start_sound_worker(self) -> None:
+        """
+        Start the sound worker thread
+        """
+        if self.sound_thread is None or not self.sound_thread.is_alive():
+            self.stop_sound_flag.clear()
+            self.sound_thread = threading.Thread(target=self.sound_worker, daemon=True)
+            self.sound_thread.start()
+
+    def queue_sound(self, sound_type : str, person_name : Optional[str]=None):
+        """Queue a sound to be played (non-blocking)"""
+        current_time = time.time()
+        
+        # Check cooldown to avoid sound spam
+        if person_name:
+            last_time = self.last_detection_time.get(person_name, 0)
+            if current_time - last_time < self.detection_cooldown:
+                return
+            self.last_detection_time[person_name] = current_time
+        
+        # Add to queue if not full
+        if self.sound_queue.qsize() < 5:  # Limit queue size
+            self.sound_queue.put(sound_type)
+
+    def start_camera(self) -> None:
+        """Start camera stream with face recognition and sound alerts"""
+        
+        # Start sound worker
+        self.start_sound_worker()
+        
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
             self.update_status_text("Error: Unable to access the camera.")
@@ -143,6 +207,7 @@ class FaceRecognitionApp:
 
         # Process every nth frame for better performance
         process_this_frame = True
+        previous_face_names = []
 
         while not self.stop_camera_flag.is_set():
             ret, frame = cap.read()
@@ -163,14 +228,24 @@ class FaceRecognitionApp:
                 for face_encoding in face_encodings:
                     matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding)
                     name = "Unknown"
-                    
+
                     if True in matches:
                         face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
                         best_match_index = np.argmin(face_distances)
                         if matches[best_match_index]:
                             name = self.known_face_names[best_match_index]
-                    
+
                     face_names.append(name)
+
+                # Check for new faces and queue sounds
+                for name in face_names:
+                    if name not in previous_face_names:
+                        if name != "Unknown":
+                            self.queue_sound("known", name)
+                        else:
+                            self.queue_sound("unknown", "Unknown")
+                
+                previous_face_names = face_names.copy()
 
             process_this_frame = not process_this_frame
 
@@ -184,11 +259,9 @@ class FaceRecognitionApp:
 
                 # Choose color based on recognition
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)  # Green for known, Red for unknown
-                ## TODO - add sound for known and unknown face
-                # play_wonderful_sound() if name != "Unknown" else play_siren_sound()
 
                 cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
-                
+
                 # Draw label
                 cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
                 font = cv2.FONT_HERSHEY_DUPLEX
@@ -203,10 +276,16 @@ class FaceRecognitionApp:
             img_b64 = base64.b64encode(buffer).decode("utf-8")
             self.image_display.src_base64 = img_b64
             self.page.update()
-            
+
             time.sleep(0.1)  # Small delay to prevent overwhelming the UI
 
         cap.release()
+        
+        # Stop sound worker
+        self.stop_sound_flag.set()
+        if self.sound_thread and self.sound_thread.is_alive():
+            self.sound_thread.join(timeout=1.0)
+        
         self.update_status_text("Camera stopped.")
         time.sleep(3)
         self.update_status_text("Click a button to begin.")
@@ -224,6 +303,15 @@ class FaceRecognitionApp:
             self.camera_running = False
             self.start_button.text = "Start Camera"
             self.image_display.src_base64 = ""  # Clear image on stop
+            self.stop_camera_flag.set()
+            self.stop_sound_flag.set()
+            
+            # Clean up sound queue
+            while not self.sound_queue.empty():
+                try:
+                    self.sound_queue.get_nowait()
+                except:
+                    break
             self.page.update()
 
     def add_face_click(self, e):

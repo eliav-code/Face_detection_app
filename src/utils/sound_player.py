@@ -5,7 +5,10 @@ import sounddevice as sd
 import winsound
 import chime
 import time
-def play_siren_sound(duration : int = 10, low_freq : int = 600, high_freq : int = 1200, rate : int = 0.25, sample_rate : int = 44100):
+# import pygame
+from typing import List
+
+def play_siren_sound(duration : int = 0.2, low_freq : int = 600, high_freq : int = 1200, rate : int = 0.25, sample_rate : int = 44100):
     """
     Play a siren-like sound.
 
@@ -39,7 +42,7 @@ def play_siren_sound(duration : int = 10, low_freq : int = 600, high_freq : int 
     # Wait until the sound playback is finished before returning
     sd.wait()
 
-def play_wonderful_sound(duration=1, f0=200, sample_rate=44100):
+def play_wonderful_sound(duration=0.2, f0=200, sample_rate=44100):
         # if self.current_play_obj and self.current_play_obj.is_playing():
         #     return
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
@@ -53,3 +56,52 @@ def play_wonderful_sound(duration=1, f0=200, sample_rate=44100):
         sd.play(waveform, samplerate=sample_rate)
 
         sd.wait()
+
+# def init_sound_system():
+#         """Initialize pygame mixer for sound playback"""
+#         try:
+#             pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+#             print("Sound system initialized successfully")
+#         except Exception as e:
+#             print(f"Failed to initialize sound system: {e}")
+
+
+# def play_beep_sequence(frequencies : List[int], duration : float):
+#         """Generate and play a sequence of beeps - simplified version"""
+#         try:
+#             sample_rate = 22050
+            
+#             for freq in frequencies:
+#                 # Generate sine wave
+#                 samples = int(sample_rate * duration)
+#                 t = np.arange(samples) / sample_rate
+#                 wave = np.sin(2 * np.pi * freq * t) * 0.3
+                
+#                 # Convert to 16-bit integers and ensure contiguous array
+#                 wave = (wave * 32767).astype(np.int16)
+#                 wave = np.ascontiguousarray(wave)
+                
+#                 # Play the sound (mono)
+#                 sound = pygame.sndarray.make_sound(wave)
+#                 sound.play()
+                
+#                 # Wait for sound to finish
+#                 time.sleep(duration + 0.1)
+                
+#         except Exception as e:
+#             print(f"Error generating beep: {e}")
+#             # Fallback: simple print beep
+#             print(f"BEEP: {freq}Hz")
+
+def play_sound_sync(sound_type : str) -> None:
+    try:
+        if sound_type == "known":
+            # Play success/welcome sound
+            play_wonderful_sound()
+        elif sound_type == "unknown":
+            # Play alert sound
+            play_siren_sound()
+    except Exception as e:
+        print(f"Error playing sound: {e}")
+             
+    

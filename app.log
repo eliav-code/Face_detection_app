@@ -8,3 +8,115 @@
 2025-06-17 23:07:03,881 - ERROR - src.business_logic.add_known_face - E is not in knows_names list!
 2025-06-17 23:07:35,151 - ERROR - src.business_logic.add_known_face - E is not in knows_names list!
 2025-06-17 23:09:12,983 - ERROR - src.business_logic.add_known_face - E is not in knows_names list!
+2026-08-21 15:34:24,905 - INFO - src.business_logic.face_manager - Upgraded legacy known_faces.pkl: 1 profile(s)
+2026-08-21 15:34:24,914 - INFO - src.business_logic.face_manager - Upgraded legacy known_faces.pkl: 1 profile(s)
+2026-08-21 15:36:19,429 - INFO - src.business_logic.face_manager - Upgraded legacy known_faces.pkl: 1 profile(s)
+2026-08-21 15:36:19,429 - INFO - src.business_logic.face_manager - Upgraded legacy known_faces.pkl: 1 profile(s)
+2026-08-21 15:39:07,612 - INFO - src.business_logic.face_manager - Upgraded legacy known_faces.pkl: 1 profile(s)
+2026-08-21 15:39:16,015 - INFO - src.utils.sound_player - SoundService worker thread started.
+2026-08-21 15:39:28,264 - INFO - src.utils.sound_player - SoundService worker thread stopped.
+2026-08-21 15:42:50,088 - ERROR - src.business_logic.face_manager - Error loading known faces from C:\Users\eliav\AppData\Local\Temp\tmpc2fvhdhc.pkl: Ran out of input
+2026-08-21 15:42:50,612 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpc2fvhdhc.pkl
+2026-08-21 15:42:50,614 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpc2fvhdhc.pkl
+2026-08-21 15:42:50,614 - INFO - src.business_logic.face_manager - Renamed profile ID '533e3b37' from 'Alice Smith' to 'Alice Wonderland'
+2026-08-21 15:42:50,614 - INFO - src.business_logic.face_manager - Saved 0 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpc2fvhdhc.pkl
+2026-08-21 15:42:50,614 - INFO - src.business_logic.face_manager - Deleted profile ID '533e3b37' (Alice Wonderland) successfully.
+2026-08-21 15:43:11,080 - INFO - src.business_logic.face_manager - Upgraded legacy known_faces.pkl: 1 profile(s)
+2026-08-21 15:45:10,117 - INFO - src.business_logic.face_manager - Upgraded legacy known_faces.pkl: 1 profile(s)
+2026-08-21 15:45:51,822 - INFO - src.business_logic.face_manager - Upgraded legacy known_faces.pkl: 1 profile(s)
+2026-08-21 15:48:50,897 - ERROR - src.business_logic.face_manager - Error loading known faces from C:\Users\eliav\AppData\Local\Temp\tmpf8ygsipo.pkl: Ran out of input
+2026-08-21 15:48:50,918 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpf8ygsipo.pkl
+2026-08-21 15:48:50,918 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpf8ygsipo.pkl
+2026-08-21 15:48:50,918 - INFO - src.business_logic.face_manager - Renamed profile ID '5d2df5e6' from 'Alice Smith' to 'Alice Wonderland'
+2026-08-21 15:48:50,918 - INFO - src.business_logic.face_manager - Saved 0 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpf8ygsipo.pkl
+2026-08-21 15:48:50,918 - INFO - src.business_logic.face_manager - Deleted profile ID '5d2df5e6' (Alice Wonderland) successfully.
+2026-08-21 15:50:16,636 - INFO - src.business_logic.face_manager - Upgraded legacy known_faces.pkl: 1 profile(s)
+2026-08-21 15:50:41,693 - INFO - src.business_logic.face_manager - Saved 0 profile(s) to known_faces.pkl
+2026-08-21 15:50:41,693 - INFO - src.business_logic.face_manager - Deleted profile ID '1c2d6f9d' (Eliav) successfully.
+2026-08-21 15:50:47,370 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to known_faces.pkl
+2026-08-21 15:52:03,544 - ERROR - src.business_logic.face_manager - Error loading known faces from C:\Users\eliav\AppData\Local\Temp\tmpza6w6ipp.pkl: Ran out of input
+2026-08-21 15:52:03,555 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpza6w6ipp.pkl
+2026-08-21 15:52:03,555 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpza6w6ipp.pkl
+2026-08-21 15:52:03,555 - INFO - src.business_logic.face_manager - Renamed profile ID '8ca1af97' from 'Alice Smith' to 'Alice Wonderland'
+2026-08-21 15:52:03,555 - INFO - src.business_logic.face_manager - Saved 0 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpza6w6ipp.pkl
+2026-08-21 15:52:03,556 - INFO - src.business_logic.face_manager - Deleted profile ID '8ca1af97' (Alice Wonderland) successfully.
+2026-08-21 15:52:48,171 - INFO - src.business_logic.face_manager - Saved 0 profile(s) to known_faces.pkl
+2026-08-21 15:52:48,171 - INFO - src.business_logic.face_manager - Deleted profile ID 'fb293ff8' (Eliav) successfully.
+2026-08-21 15:52:54,039 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to known_faces.pkl
+2026-08-21 15:57:06,650 - ERROR - src.business_logic.face_manager - Error loading known faces from C:\Users\eliav\AppData\Local\Temp\tmpndtpwkaq.pkl: Ran out of input
+2026-08-21 15:57:06,681 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpndtpwkaq.pkl
+2026-08-21 15:57:06,681 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpndtpwkaq.pkl
+2026-08-21 15:57:06,681 - INFO - src.business_logic.face_manager - Renamed profile ID '2450d9c9' from 'Alice Smith' to 'Alice Wonderland'
+2026-08-21 15:57:06,682 - INFO - src.business_logic.face_manager - Saved 0 profile(s) to C:\Users\eliav\AppData\Local\Temp\tmpndtpwkaq.pkl
+2026-08-21 15:57:06,682 - INFO - src.business_logic.face_manager - Deleted profile ID '2450d9c9' (Alice Wonderland) successfully.
+2026-08-21 15:58:05,853 - INFO - src.utils.sound_player - SoundService worker thread started.
+2026-08-21 15:58:06,314 - INFO - src.gui.main_window - Webcam stream started successfully.
+2026-08-21 15:58:13,583 - INFO - src.utils.sound_player - SoundService worker thread stopped.
+2026-08-21 15:58:13,587 - INFO - src.gui.main_window - Webcam stream stopped.
+2026-08-21 15:58:15,526 - INFO - src.utils.sound_player - SoundService worker thread started.
+2026-08-21 15:58:15,759 - INFO - src.gui.main_window - Webcam stream started successfully.
+2026-08-21 15:58:36,797 - INFO - src.utils.sound_player - SoundService worker thread stopped.
+2026-08-21 15:58:36,800 - INFO - src.gui.main_window - Webcam stream stopped.
+2026-08-21 15:58:45,937 - INFO - src.business_logic.face_manager - Saved 0 profile(s) to known_faces.pkl
+2026-08-21 15:58:45,937 - INFO - src.business_logic.face_manager - Deleted profile 'Eliav' successfully.
+2026-08-21 15:58:52,875 - INFO - src.utils.sound_player - SoundService worker thread started.
+2026-08-21 15:58:53,170 - INFO - src.gui.main_window - Webcam stream started successfully.
+2026-08-21 15:58:59,737 - INFO - src.utils.sound_player - SoundService worker thread stopped.
+2026-08-21 15:58:59,740 - INFO - src.gui.main_window - Webcam stream stopped.
+2026-08-21 15:59:08,248 - INFO - src.business_logic.face_manager - Saved 1 profile(s) to known_faces.pkl
+2026-08-21 15:59:12,013 - INFO - src.utils.sound_player - SoundService worker thread started.
+2026-08-21 15:59:12,198 - INFO - src.gui.main_window - Webcam stream started successfully.
+2026-08-21 15:59:17,338 - ERROR - src.gui.main_window - Error in video frame processing loop: Image Control must be added to the page first
+2026-08-21 15:59:17,662 - INFO - src.utils.sound_player - SoundService worker thread stopped.
+2026-08-21 15:59:17,668 - INFO - src.gui.main_window - Webcam stream stopped.
+2026-08-21 16:04:51,897 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: C:\Users\eliav\AppData\Local\Temp\tmp2ijvf15s\alerts\unknown_20260821_160451_6aed.jpg
+2026-08-21 16:04:51,902 - INFO - src.business_logic.activity_logger - Saved manual snapshot: C:\Users\eliav\AppData\Local\Temp\tmp2ijvf15s\snapshots\snapshot_20260821_160451.jpg
+2026-08-21 16:04:51,903 - INFO - src.business_logic.activity_logger - Exported 2 record(s) to C:\Users\eliav\AppData\Local\Temp\tmp2ijvf15s\test_log.csv
+2026-08-21 16:07:32,049 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: C:\Users\eliav\AppData\Local\Temp\tmpon061fh9\alerts\unknown_20260821_160732_bf64.jpg
+2026-08-21 16:07:32,054 - INFO - src.business_logic.activity_logger - Saved manual snapshot: C:\Users\eliav\AppData\Local\Temp\tmpon061fh9\snapshots\snapshot_20260821_160732.jpg
+2026-08-21 16:07:32,056 - INFO - src.business_logic.activity_logger - Exported 2 record(s) to C:\Users\eliav\AppData\Local\Temp\tmpon061fh9\test_log.csv
+2026-08-21 16:08:06,610 - INFO - src.utils.sound_player - SoundService worker thread started.
+2026-08-21 16:08:06,932 - INFO - src.gui.main_window - Webcam pipeline started at full speed.
+2026-08-21 16:08:32,924 - INFO - src.utils.sound_player - SoundService worker thread stopped.
+2026-08-21 16:08:32,928 - INFO - src.gui.main_window - Webcam pipeline stopped.
+2026-08-21 16:08:51,789 - INFO - src.utils.sound_player - SoundService worker thread started.
+2026-08-21 16:08:52,104 - INFO - src.gui.main_window - Webcam pipeline started at full speed.
+2026-08-21 16:08:56,142 - INFO - src.utils.sound_player - SoundService worker thread stopped.
+2026-08-21 16:08:56,146 - INFO - src.gui.main_window - Webcam pipeline stopped.
+2026-08-21 16:09:01,389 - INFO - src.utils.sound_player - SoundService worker thread started.
+2026-08-21 16:09:01,574 - INFO - src.gui.main_window - Webcam pipeline started at full speed.
+2026-08-21 16:09:02,486 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: alerts\unknown_20260821_160902_0123.jpg
+2026-08-21 16:09:06,691 - INFO - src.utils.sound_player - SoundService worker thread stopped.
+2026-08-21 16:09:06,695 - INFO - src.gui.main_window - Webcam pipeline stopped.
+2026-08-21 16:11:07,583 - INFO - src.utils.sound_player - SoundService ready with native async audio.
+2026-08-21 16:11:16,111 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: C:\Users\eliav\AppData\Local\Temp\tmpbrk22jm7\alerts\unknown_20260821_161116_41eb.jpg
+2026-08-21 16:11:16,119 - INFO - src.business_logic.activity_logger - Saved manual snapshot: C:\Users\eliav\AppData\Local\Temp\tmpbrk22jm7\snapshots\snapshot_20260821_161116.jpg
+2026-08-21 16:11:16,123 - INFO - src.business_logic.activity_logger - Exported 2 record(s) to C:\Users\eliav\AppData\Local\Temp\tmpbrk22jm7\test_log.csv
+2026-08-21 16:12:12,763 - INFO - src.utils.sound_player - SoundService ready with native async audio.
+2026-08-21 16:12:13,200 - INFO - src.gui.main_window - Webcam pipeline started at full speed.
+2026-08-21 16:12:28,157 - INFO - src.utils.sound_player - SoundService stopped.
+2026-08-21 16:12:28,166 - INFO - src.gui.main_window - Webcam pipeline stopped.
+2026-08-21 16:13:10,046 - INFO - src.utils.sound_player - SoundService ready with native async audio.
+2026-08-21 16:13:10,448 - INFO - src.gui.main_window - Webcam pipeline started at full speed.
+2026-08-21 16:13:17,967 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: alerts\unknown_20260821_161317_994e.jpg
+2026-08-21 16:13:25,263 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: alerts\unknown_20260821_161325_1aef.jpg
+2026-08-21 16:13:29,953 - INFO - src.utils.sound_player - SoundService stopped.
+2026-08-21 16:13:29,961 - INFO - src.gui.main_window - Webcam pipeline stopped.
+2026-08-21 16:14:22,773 - INFO - src.utils.sound_player - SoundService ready with native async audio.
+2026-08-21 16:14:23,261 - INFO - src.gui.main_window - Webcam pipeline started at full speed.
+2026-08-21 16:14:28,448 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: alerts\unknown_20260821_161428_6761.jpg
+2026-08-21 16:14:33,823 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: alerts\unknown_20260821_161433_0578.jpg
+2026-08-21 16:14:46,593 - INFO - src.utils.sound_player - SoundService stopped.
+2026-08-21 16:14:46,602 - INFO - src.gui.main_window - Webcam pipeline stopped.
+2026-08-21 16:24:38,478 - INFO - src.utils.sound_player - SoundService: Known face sound updated to 'Harmonic Chime'
+2026-08-21 16:24:41,397 - INFO - src.utils.sound_player - SoundService: Known face sound updated to 'Smart Bell'
+2026-08-21 16:24:44,056 - INFO - src.utils.sound_player - SoundService: Known face sound updated to 'Marimba Scale'
+2026-08-21 16:24:47,399 - INFO - src.utils.sound_player - SoundService: Unknown face sound updated to 'Security Siren'
+2026-08-21 16:24:51,005 - INFO - src.utils.sound_player - SoundService: Unknown face sound updated to 'Double Buzzer'
+2026-08-21 16:24:53,349 - INFO - src.utils.sound_player - SoundService: Unknown face sound updated to 'Sonar Pulse'
+2026-08-21 16:24:55,299 - INFO - src.utils.sound_player - SoundService: Unknown face sound updated to 'Sci-Fi Alarm'
+2026-08-21 16:25:05,268 - INFO - src.utils.sound_player - SoundService ready (Known: 'Marimba Scale', Unknown: 'Sci-Fi Alarm')
+2026-08-21 16:25:05,684 - INFO - src.gui.main_window - Webcam pipeline started at full speed.
+2026-08-21 16:25:11,899 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: alerts\unknown_20260821_162511_6187.jpg
+2026-08-21 16:25:17,044 - INFO - src.business_logic.activity_logger - Auto-saved alert snapshot for unknown visitor: alerts\unknown_20260821_162517_f9a6.jpg
+2026-08-21 16:25:29,420 - INFO - src.gui.main_window - Webcam pipeline stopped.

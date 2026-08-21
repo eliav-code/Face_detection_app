@@ -1,447 +1,727 @@
-from ctypes import alignment
-from multiprocessing.pool import CLOSE
-from re import L
-from typing import Optional
-from venv import logger
+from typing import Optional, List
 import flet as ft
 import cv2
 import base64
 import threading
 import time
-import face_recognition
-import numpy as np
-from queue import Queue
-# import pygame
 import os
+import copy
+import numpy as np
 
-from sympy import loggamma
-from src.business_logic.add_known_face import FaceAdder
-from src.utils.sound_player import play_sound_sync
+from config import setup_logger
+from src.business_logic.face_manager import FaceManager
+from src.business_logic.face_recognizer import FaceRecognizer
+from src.business_logic.activity_logger import ActivityLogger
+from src.business_logic.models import DetectionResult
+from src.utils.sound_player import (
+    SoundService,
+    KNOWN_SOUND_OPTIONS,
+    UNKNOWN_SOUND_OPTIONS,
+    play_sound_by_name
+)
+from src.gui.gallery_view import FaceGalleryView
+from src.gui.activity_log_view import ActivityLogView
+
+logger = setup_logger(__name__)
 
 class FaceRecognitionApp:
     def __init__(self, page: ft.Page):
         self.page = page
-        self.page.title = "Real-Time Face Recognition"
-        self.page.window.width = 800
-        self.page.window.height = 700
-        self.page.scroll = "AUTO"
+        self.page.title = "Face Recognition Studio"
+        self.page.window.width = 960
+        self.page.window.height = 840
+        self.page.theme_mode = ft.ThemeMode.SYSTEM
+        self.page.padding = 16
 
+        # Core Services
+        self.face_manager = FaceManager()
+        self.face_recognizer = FaceRecognizer(tolerance=0.55)
+        self.sound_service = SoundService(cooldown=3.0, volume=0.5)
+        self.activity_logger = ActivityLogger(cooldown=5.0)
+
+        # Multi-Threaded Streaming State
         self.stop_camera_flag = threading.Event()
         self.camera_running = False
+        self.stream_thread: Optional[threading.Thread] = None
+        self.detection_thread: Optional[threading.Thread] = None
 
-        # Face recognition data - these will be managed by business logic
-        self.known_face_encodings = []
-        self.known_face_names = []
+        # Thread-safe frame and detection buffers
+        self.frame_lock = threading.Lock()
+        self.latest_raw_frame: Optional[np.ndarray] = None
+        self.latest_detections: List[DetectionResult] = []
 
-        # # Sound initializations
-        # init_sound_system()
+        # File Picker for photo enrollment
+        self.file_picker = ft.FilePicker(on_result=self._on_file_picked)
+        self.page.overlay.append(self.file_picker)
 
-        # Sound queue for non-blocking audio
-        self.sound_queue = Queue()
-        self.sound_thread = None
-        self.stop_sound_flag = threading.Event()
-
-        # Track last detection to avoid spam
-        self.last_detection_time = {}
-        self.detection_cooldown = 2.0 # In seconds
-
-
-        # UI elements
-        self.status_text = ft.Text("Click a button to begin.", size=16, selectable=True)
-        self.image_display = ft.Image(src="", width=640, height=360, fit="CONTAIN")
-        self.start_button = ft.ElevatedButton("Start Camera", on_click=self.start_camera_click)
-
-        # Delete face UI
-        self.name_input_to_delete = ft.TextField(label="Enter name to delete")
-        self.delete_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Delete known face", selectable=True),
-            content=self.name_input_to_delete,
-            actions=[
-                ft.TextButton("Cancel", on_click=self.close_delete_dialog),
-                ft.TextButton("Submit", on_click=self.submit_deleting)
-            ]
-        )
-        self.delete_face_button = ft.ElevatedButton("Delete known face", on_click=self.delete_face_click)
-
-        # Add face UI
-        self.name_input_to_add = ft.TextField(
-            label="Person's Name (optional)",
-            width=200,
-            value=""
+        # Components
+        self.gallery_view = FaceGalleryView(
+            page=self.page,
+            face_manager=self.face_manager,
+            on_profiles_updated=self._on_profiles_updated,
+            on_request_camera_enroll=self.add_face_click,
+            on_request_file_enroll=self._open_file_picker
         )
 
+        self.activity_view = ActivityLogView(
+            page=self.page,
+            activity_logger=self.activity_logger
+        )
+
+        # Build UI Elements & Tabs
+        self._init_ui_components()
+        self.build_ui()
+
+        self.page.window.on_event = self.on_window_event
+        self.update_face_count()
+
+    def _init_ui_components(self):
+        """Initialize live camera, dialogs, dropdowns, and settings controls."""
+        # Live Studio Status & Badge
+        self.status_text = ft.Text("Ready. Click 'Start Camera' to begin.", size=14, weight="w500")
+        self.status_badge = ft.Container(
+            content=ft.Row([
+                ft.Icon(ft.icons.FIBER_MANUAL_RECORD, size=12, color=ft.colors.GREY_400),
+                self.status_text
+            ], alignment="center", tight=True),
+            bgcolor=ft.colors.SURFACE_VARIANT,
+            padding=ft.padding.symmetric(horizontal=12, vertical=6),
+            border_radius=16
+        )
+
+        # Active Image element for live streaming
+        self.image_display = ft.Image(
+            src_base64="",
+            width=640,
+            height=360,
+            fit="CONTAIN"
+        )
+
+        # Visual camera placeholder before stream is started
+        self.camera_placeholder = ft.Container(
+            content=ft.Column([
+                ft.Icon(ft.icons.VIDEOCAM_OUTLINED, size=64, color=ft.colors.OUTLINE),
+                ft.Text("Camera is Inactive", size=17, weight=ft.FontWeight.BOLD, color=ft.colors.OUTLINE),
+                ft.Text("Click 'Start Camera' below to launch high-speed 30+ FPS face detection", size=13, color=ft.colors.OUTLINE)
+            ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
+            alignment=ft.alignment.center,
+            width=640,
+            height=360
+        )
+
+        # Video viewport box
+        self.video_container = ft.Container(
+            content=self.camera_placeholder,
+            alignment=ft.alignment.center,
+            bgcolor=ft.colors.BLACK12,
+            border=ft.border.all(1, ft.colors.OUTLINE_VARIANT),
+            border_radius=12,
+            width=652,
+            height=372
+        )
+
+        self.start_button = ft.ElevatedButton(
+            "Start Camera",
+            icon=ft.icons.VIDEOCAM,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+                padding=14
+            ),
+            on_click=self.start_camera_click
+        )
+
+        self.snapshot_button = ft.ElevatedButton(
+            "Take Snapshot",
+            icon=ft.icons.CAMERA,
+            on_click=self.take_snapshot_click
+        )
+
+        self.enroll_webcam_button = ft.ElevatedButton(
+            "Enroll (Webcam)",
+            icon=ft.icons.PERSON_ADD,
+            on_click=self.add_face_click
+        )
+
+        self.enroll_file_button = ft.ElevatedButton(
+            "Upload Photo",
+            icon=ft.icons.UPLOAD_FILE,
+            on_click=lambda _: self._open_file_picker()
+        )
+
+        self.delete_dropdown_button = ft.ElevatedButton(
+            "Delete Face",
+            icon=ft.icons.PERSON_REMOVE,
+            color=ft.colors.ERROR,
+            on_click=self.open_delete_dropdown_dialog
+        )
+
+        self.sound_toggle_button = ft.IconButton(
+            icon=ft.icons.VOLUME_UP,
+            tooltip="Toggle Alert Sounds",
+            on_click=self._toggle_sound
+        )
+
+        self.face_count_badge = ft.Container(
+            content=ft.Row([
+                ft.Icon(ft.icons.PEOPLE, size=16),
+                ft.Text(f"Known faces: {self.face_manager.get_face_count()}", size=13, weight="bold")
+            ], tight=True, alignment="center"),
+            bgcolor=ft.colors.PRIMARY_CONTAINER,
+            padding=ft.padding.symmetric(horizontal=12, vertical=6),
+            border_radius=16
+        )
+
+        # Add Face Dialog (Webcam Enrollment)
+        self.name_input_to_add = ft.TextField(label="Person's Name (optional)", width=260, autofocus=True)
         self.add_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Add unknown face", selectable=True),
-            content=self.name_input_to_add,
+            title=ft.Text("Enroll New Face via Camera"),
+            content=ft.Column([
+                ft.Text("Enter a name, look directly at the webcam, and click Capture:"),
+                self.name_input_to_add
+            ], tight=True),
             actions=[
                 ft.TextButton("Cancel", on_click=self.close_add_dialog),
-                ft.TextButton("Submit", on_click=self.submit_adding)
+                ft.ElevatedButton("Capture & Enroll", icon=ft.icons.CAMERA, on_click=self.submit_adding)
             ]
         )
-        self.add_face_button = ft.ElevatedButton("Add Known Face", on_click=self.add_face_click)
 
-        # Face count display
-        self.face_count_text = ft.Text(f"Known faces: {len(self.known_face_encodings)}", size=14, selectable=True)
-
-        # Add instructions for the app
-        self.instructions_dialog = ft.AlertDialog(
-            title=ft.Text("Information about the app:", selectable=True),
-            content=self.info_text(),
-            actions=[ft.ElevatedButton("Close dialog", icon=ft.icons.CLOSE, on_click=self.close_help_dialog)],
-            modal=False # The dialog enable the use of the rest of the page.
+        # File Upload Name Dialog
+        self.pending_file_path: Optional[str] = None
+        self.file_name_input = ft.TextField(label="Person's Name (optional)", width=260, autofocus=True)
+        self.file_add_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Enroll Face from Photo"),
+            content=ft.Column([
+                ft.Text("Provide an optional name for the person in this photo:"),
+                self.file_name_input
+            ], tight=True),
+            actions=[
+                ft.TextButton("Cancel", on_click=self._close_file_add_dialog),
+                ft.ElevatedButton("Save Profile", icon=ft.icons.CHECK, on_click=self._submit_file_adding)
+            ]
         )
-        self.help_icon_button = ft.IconButton(
-            icon=ft.icons.HELP_OUTLINE,
-            tooltip="Press for instructions",
-            on_click=self.open_help_dialog
+
+        # Delete Face with Dropdown Dialog
+        self.delete_dropdown = ft.Dropdown(label="Select Face to Delete", width=280)
+        self.delete_dropdown_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Delete Known Face"),
+            content=ft.Column([
+                ft.Text("Choose a registered person to delete from the database:"),
+                self.delete_dropdown
+            ], tight=True),
+            actions=[
+                ft.TextButton("Cancel", on_click=self.close_delete_dropdown_dialog),
+                ft.ElevatedButton(
+                    "Delete Selected",
+                    icon=ft.icons.DELETE_FOREVER,
+                    bgcolor=ft.colors.ERROR,
+                    color=ft.colors.WHITE,
+                    on_click=self.submit_dropdown_deleting
+                )
+            ]
         )
 
-        self.build_ui()
-        self.page.window.on_event = self.on_window_event
+        # Settings Controls - Sliders
+        self.tolerance_slider = ft.Slider(
+            min=0.3,
+            max=0.7,
+            divisions=8,
+            value=self.face_recognizer.tolerance,
+            label="{value}",
+            on_change=self._on_tolerance_change
+        )
+        self.tolerance_val_text = ft.Text(f"{self.face_recognizer.tolerance:.2f}", weight="bold")
 
-        # Initialize FaceAdder (business logic)
-        self.face_adder = FaceAdder()
-        self.load_known_faces()
+        # Sound Selection Dropdowns
+        self.known_sound_dropdown = ft.Dropdown(
+            label="Known Face Alert Sound",
+            value=self.sound_service.known_sound,
+            options=[ft.dropdown.Option(s) for s in KNOWN_SOUND_OPTIONS],
+            width=320,
+            on_change=self._on_known_sound_change
+        )
+
+        self.unknown_sound_dropdown = ft.Dropdown(
+            label="Unknown Visitor Alert Sound",
+            value=self.sound_service.unknown_sound,
+            options=[ft.dropdown.Option(s) for s in UNKNOWN_SOUND_OPTIONS],
+            width=320,
+            on_change=self._on_unknown_sound_change
+        )
 
     def build_ui(self):
-        """Build the user interface"""
+        """Construct the modern tabbed layout."""
+        # Tab 1: Live Studio View
+        studio_tab = ft.Tab(
+            text="Live Camera Studio",
+            icon=ft.icons.VIDEOCAM,
+            content=ft.Container(
+                padding=16,
+                content=ft.Column([
+                    ft.Row([
+                        self.status_badge,
+                        self.face_count_badge
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    self.video_container,
+                    ft.Row([
+                        self.start_button,
+                        self.snapshot_button,
+                        self.enroll_webcam_button,
+                        self.enroll_file_button,
+                        self.delete_dropdown_button,
+                        self.sound_toggle_button
+                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=8, wrap=True)
+                ], alignment="start", horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=14, scroll="AUTO")
+            )
+        )
+
+        # Tab 2: Visual Face Gallery
+        gallery_tab = ft.Tab(
+            text="Face Gallery",
+            icon=ft.icons.PEOPLE_ALT,
+            content=ft.Container(
+                padding=16,
+                content=self.gallery_view.get_view()
+            )
+        )
+
+        # Tab 3: Activity & Attendance Log
+        activity_tab = ft.Tab(
+            text="Activity Log",
+            icon=ft.icons.HISTORY,
+            content=ft.Container(
+                padding=16,
+                content=self.activity_view.get_view()
+            )
+        )
+
+        # Tab 4: Settings & Info
+        settings_tab = ft.Tab(
+            text="Settings & Guide",
+            icon=ft.icons.SETTINGS,
+            content=ft.Container(
+                padding=20,
+                content=ft.Column([
+                    ft.Text("Recognition Configuration", size=18, weight="bold"),
+                    ft.Card(
+                        content=ft.Container(
+                            padding=16,
+                            content=ft.Column([
+                                ft.Row([
+                                    ft.Text("Matching Tolerance (Sensitivity):", size=14, weight="w500"),
+                                    self.tolerance_val_text
+                                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                                self.tolerance_slider,
+                                ft.Text(
+                                    "Lower values = Stricter matching (fewer false positives). Higher values = More lenient matching.",
+                                    size=12,
+                                    color=ft.colors.OUTLINE
+                                )
+                            ], spacing=6)
+                        )
+                    ),
+                    ft.Text("Audio Alerts & Sound Customization", size=18, weight="bold"),
+                    ft.Card(
+                        content=ft.Container(
+                            padding=16,
+                            content=ft.Column([
+                                ft.Text("Choose custom audio tones for detection events:", size=13, color=ft.colors.OUTLINE),
+                                ft.Row([
+                                    self.known_sound_dropdown,
+                                    ft.IconButton(
+                                        icon=ft.icons.PLAY_CIRCLE_FILL,
+                                        icon_size=32,
+                                        icon_color=ft.colors.PRIMARY,
+                                        tooltip="Preview Known Face Sound",
+                                        on_click=lambda _: self.sound_service.play_known_preview()
+                                    )
+                                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                                ft.Row([
+                                    self.unknown_sound_dropdown,
+                                    ft.IconButton(
+                                        icon=ft.icons.PLAY_CIRCLE_FILL,
+                                        icon_size=32,
+                                        icon_color=ft.colors.ERROR,
+                                        tooltip="Preview Unknown Visitor Sound",
+                                        on_click=lambda _: self.sound_service.play_unknown_preview()
+                                    )
+                                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+                            ], spacing=12)
+                        )
+                    ),
+                    ft.Text("Application Guide", size=18, weight="bold"),
+                    ft.Card(
+                        content=ft.Container(
+                            padding=16,
+                            content=ft.Column([
+                                ft.Text("• 30+ FPS Live HUD: Real-time recognition, match percentage, and live FPS counter.", size=13),
+                                ft.Text("• Sound Customization: Pick different sound effects from dropdowns and preview them live.", size=13),
+                                ft.Text("• Take Snapshot: Save high-resolution photos of the camera stream to 'snapshots/'.", size=13),
+                                ft.Text("• Activity Log: View real-time visitor attendance and export records to CSV.", size=13),
+                                ft.Text("• Auto-Alert Snapshots: Unknown faces are automatically photographed and stored in 'alerts/'.", size=13),
+                                ft.Text("• Face Gallery: Manage registered people, rename profiles, or delete with confirmation.", size=13)
+                            ], spacing=6)
+                        )
+                    )
+                ], spacing=16, scroll="AUTO")
+            )
+        )
+
+        self.tabs = ft.Tabs(
+            selected_index=0,
+            animation_duration=250,
+            tabs=[studio_tab, gallery_tab, activity_tab, settings_tab],
+            expand=True
+        )
+
         self.page.add(
             ft.Column([
                 ft.Row([
                     ft.Text(
-                        value="Face detector app", 
-                        size=50,
-                        weight=ft.FontWeight.W_900,
-                        selectable=True)
+                        value="Face Recognition Studio",
+                        size=26,
+                        weight=ft.FontWeight.BOLD,
+                        selectable=True
+                    )
                 ], alignment="center"),
-                ft.Container(self.image_display, alignment=ft.alignment.center),
-                ft.Row([
-                    self.start_button, 
-                    self.add_face_button,
-                    self.delete_face_button
-                ], alignment="center"),
-                self.status_text,
-                self.face_count_text,
-                ft.Divider(),
-                ft.Row([
-                    self.help_icon_button
-                ], ft.MainAxisAlignment.END)
-                
-            ], alignment="center")
+                ft.Container(self.tabs, expand=True)
+            ], expand=True, spacing=10)
         )
 
-    def update_status_text(self, message):
-        """Update status text and refresh UI"""
-        self.status_text.value = message
+    def _toggle_sound(self, e):
+        """Toggle alert sound playback on/off."""
+        is_enabled = self.sound_service.toggle_sound()
+        self.sound_toggle_button.icon = ft.icons.VOLUME_UP if is_enabled else ft.icons.VOLUME_OFF
+        self.sound_toggle_button.tooltip = "Sound Alerts Enabled" if is_enabled else "Sound Alerts Muted"
         self.page.update()
 
-    def load_known_faces(self):
-        """Load known faces using business logic"""
-        try:
-            encodings, names = self.face_adder.load_known_faces()
-            self.known_face_encodings = encodings
-            self.known_face_names = names
-            self.update_face_count()
-        except Exception as e:
-            self.update_status_text(f"Error loading faces: {str(e)}")
+    def _on_tolerance_change(self, e):
+        val = round(self.tolerance_slider.value, 2)
+        self.face_recognizer.tolerance = val
+        self.tolerance_val_text.value = f"{val:.2f}"
+        self.page.update()
+
+    def _on_known_sound_change(self, e):
+        if self.known_sound_dropdown.value:
+            self.sound_service.set_known_sound(self.known_sound_dropdown.value)
+            self.sound_service.play_known_preview()
+
+    def _on_unknown_sound_change(self, e):
+        if self.unknown_sound_dropdown.value:
+            self.sound_service.set_unknown_sound(self.unknown_sound_dropdown.value)
+            self.sound_service.play_unknown_preview()
+
+    def update_status_text(self, message: str, is_active: bool = False):
+        """Update live status badge."""
+        self.status_text.value = message
+        self.status_badge.content.controls[0].color = ft.colors.GREEN if is_active else ft.colors.GREY_400
+        self.page.update()
 
     def update_face_count(self):
-        """Update the face count display"""
-        self.face_count_text.value = f"Known faces: {len(self.known_face_encodings)}"
+        """Refresh known faces count display in badge."""
+        self.face_count_badge.content.controls[1].value = f"Known faces: {self.face_manager.get_face_count()}"
         self.page.update()
-    
 
-    def sound_worker(self) -> None:
-        """Worker thread for playing sounds without blocking main camera loop"""
-        while not self.stop_sound_flag.is_set():
-            try:
-                # Wait for sound request with timeout
-                if not self.sound_queue.empty():
-                    sound_type = self.sound_queue.get(timeout=0.1)
-                    play_sound_sync(sound_type)
-                else: # No sound insert into the queue
-                    time.sleep(0.1)
-            except Exception as e:
-                logger.error(f"Sound worker error: {e}")
-                raise
+    def _on_profiles_updated(self):
+        """Callback when gallery modifies profiles (rename/delete)."""
+        self.update_face_count()
 
+    def _open_file_picker(self):
+        """Open system file picker for selecting face photo."""
+        self.file_picker.pick_files(
+            dialog_title="Select a Face Photo",
+            allowed_extensions=["jpg", "jpeg", "png", "bmp", "webp"]
+        )
 
-    def start_sound_worker(self) -> None:
-        """
-        Start the sound worker thread
-        """
-        if self.sound_thread is None or not self.sound_thread.is_alive():
-            self.stop_sound_flag.clear()
-            self.sound_thread = threading.Thread(target=self.sound_worker, daemon=True)
-            self.sound_thread.start()
-
-    def queue_sound(self, sound_type : str, person_name : Optional[str]=None):
-        """Queue a sound to be played (non-blocking)"""
-        current_time = time.time()
-        
-        # Check cooldown to avoid sound spam
-        if person_name:
-            last_time = self.last_detection_time.get(person_name, 0)
-            if current_time - last_time < self.detection_cooldown:
-                return
-            self.last_detection_time[person_name] = current_time
-        
-        # Add to queue if not full
-        if self.sound_queue.qsize() < 5:  # Limit queue size
-            self.sound_queue.put(sound_type)
-
-    def start_camera(self) -> None:
-        """Start camera stream with face recognition and sound alerts"""
-        
-        # Start sound worker
-        self.start_sound_worker()
-        
-        cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            self.update_status_text("Error: Unable to access the camera.")
+    def _on_file_picked(self, e: ft.FilePickerResultEvent):
+        """Handle picked photo file."""
+        if not e.files or len(e.files) == 0:
             return
 
-        self.update_status_text("Camera is running... Detecting faces...")
+        file_path = e.files[0].path
+        if not file_path:
+            return
 
-        # Process every nth frame for better performance
-        process_this_frame = True
-        previous_face_names = []
+        self.pending_file_path = file_path
+        self.file_name_input.value = ""
+        self.page.open(self.file_add_dialog)
+        self.page.update()
+
+    def _close_file_add_dialog(self, e):
+        self.page.close(self.file_add_dialog)
+        self.pending_file_path = None
+        self.page.update()
+
+    def _submit_file_adding(self, e):
+        """Enroll face from selected image file."""
+        self.page.close(self.file_add_dialog)
+        self.page.update()
+
+        if not self.pending_file_path:
+            return
+
+        name = self.file_name_input.value.strip() or None
+        file_path = self.pending_file_path
+        self.pending_file_path = None
+
+        self.update_status_text("Processing image file...")
+
+        def _do_file_add():
+            success, msg, _ = self.face_manager.add_face_from_image_file(file_path=file_path, name=name)
+            self.update_status_text(msg)
+            if success:
+                self.gallery_view.refresh()
+                self.update_face_count()
+
+        threading.Thread(target=_do_file_add, daemon=True).start()
+
+    # -------------------------------------------------------------
+    # 🚀 HIGH-SPEED MULTI-THREADED VIDEO PIPELINE (30+ FPS)
+    # -------------------------------------------------------------
+    def _recognition_worker_loop(self) -> None:
+        """
+        Background worker thread: runs face detection & recognition in parallel
+        without blocking the camera capture frame rate.
+        """
+        while not self.stop_camera_flag.is_set():
+            frame_to_process = None
+            with self.frame_lock:
+                if self.latest_raw_frame is not None:
+                    frame_to_process = self.latest_raw_frame.copy()
+
+            if frame_to_process is not None:
+                try:
+                    known_encodings = self.face_manager.get_known_encodings()
+                    known_names = self.face_manager.get_known_names()
+                    detections = self.face_recognizer.process_frame(frame_to_process, known_encodings, known_names)
+
+                    # Atomically update detections
+                    self.latest_detections = detections
+
+                    # Process logging & sound alerts for detected faces
+                    for det in detections:
+                        # Log to activity logger (auto-snapshots unknown visitor)
+                        new_entry = self.activity_logger.log_detection(det, frame_to_process)
+                        if new_entry:
+                            # Play sound alert asynchronously
+                            self.sound_service.queue_alert(
+                                "known" if det.is_known else "unknown",
+                                person_name=det.name
+                            )
+
+                except Exception as ex:
+                    logger.error(f"Error in async recognition worker: {ex}")
+
+            # Run detection roughly every ~100ms to balance CPU & responsiveness
+            time.sleep(0.1)
+
+    def _camera_capture_and_render_loop(self) -> None:
+        """
+        Main video thread: reads webcam at native 30+ FPS, renders latest HUD annotations,
+        and streams to GUI smoothly.
+        """
+        self.sound_service.start()
+
+        # Open camera using DirectShow on Windows for instant initialization
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW) if os.name == 'nt' else cv2.VideoCapture(0)
+        if not cap.isOpened():
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
+                logger.error("Unable to access webcam device.")
+                self.update_status_text("Error: Unable to access camera.")
+                self.camera_running = False
+                self.start_button.text = "Start Camera"
+                self.start_button.icon = ft.icons.VIDEOCAM
+                self.video_container.content = self.camera_placeholder
+                self.page.update()
+                return
+
+        # Start async recognition worker thread
+        self.detection_thread = threading.Thread(target=self._recognition_worker_loop, daemon=True)
+        self.detection_thread.start()
+
+        self.video_container.content = self.image_display
+        self.update_status_text("Live — 30+ FPS Face Recognition Active", is_active=True)
+        self.page.update()
+        logger.info("Webcam pipeline started at full speed.")
+
+        # FPS calculation variables
+        prev_time = time.time()
+        fps_smooth = 30.0
 
         while not self.stop_camera_flag.is_set():
             ret, frame = cap.read()
             if not ret:
-                self.update_status_text("Error: Failed to read frame.")
+                logger.warning("Failed to read frame from webcam.")
+                self.update_status_text("Error: Failed to read camera frame.")
                 break
 
-            # Resize frame for faster processing
-            small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-            rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+            # Calculate instantaneous rolling FPS
+            curr_time = time.time()
+            dt = curr_time - prev_time
+            prev_time = curr_time
+            if dt > 0:
+                inst_fps = 1.0 / dt
+                fps_smooth = 0.9 * fps_smooth + 0.1 * inst_fps
 
-            # Only process every other frame to save time
-            if process_this_frame:
-                face_locations = face_recognition.face_locations(rgb_small_frame)
-                face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+            # Share latest frame with background recognition worker
+            with self.frame_lock:
+                self.latest_raw_frame = frame
 
-                face_names = []
-                for face_encoding in face_encodings:
-                    matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding)
-                    name = "Unknown"
+            try:
+                # Copy latest detections atomically
+                detections = copy.copy(self.latest_detections)
 
-                    if True in matches:
-                        face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
-                        best_match_index = np.argmin(face_distances)
-                        if matches[best_match_index]:
-                            name = self.known_face_names[best_match_index]
+                # Draw HUD annotations & FPS overlay
+                annotated_frame = self.face_recognizer.draw_annotations(
+                    frame,
+                    detections,
+                    fps=fps_smooth,
+                    show_confidence=True
+                )
 
-                    face_names.append(name)
+                # Resize for display
+                display_frame = cv2.resize(annotated_frame, (640, 360))
+                success, buffer = cv2.imencode(".jpg", display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                if success:
+                    img_b64 = base64.b64encode(buffer).decode("utf-8")
+                    self.image_display.src_base64 = img_b64
 
-                # Check for new faces and queue sounds
-                for name in face_names:
-                    if name not in previous_face_names:
-                        if name != "Unknown":
-                            self.queue_sound("known", name)
-                        else:
-                            self.queue_sound("unknown", "Unknown")
-                
-                previous_face_names = face_names.copy()
+                    # Safe update: only update if image is mounted on the page
+                    if self.image_display.page is not None:
+                        self.image_display.update()
 
-            process_this_frame = not process_this_frame
+            except Exception as ex:
+                logger.error(f"Error in video render loop: {ex}")
 
-            # Draw rectangles and labels on the frame
-            for (top, right, bottom, left), name in zip(face_locations, face_names):
-                # Scale back up face locations since the frame we detected in was scaled to 1/4 size
-                top *= 4
-                right *= 4
-                bottom *= 4
-                left *= 4
-
-                # Choose color based on recognition
-                color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)  # Green for known, Red for unknown
-
-                cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
-
-                # Draw label
-                cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
-                font = cv2.FONT_HERSHEY_DUPLEX
-                cv2.putText(frame, name, (left + 6, bottom - 6), font, 0.8, (255, 255, 255), 1)
-
-            # Resize frame for display
-            frame = cv2.resize(frame, (640, 360))
-            ret, buffer = cv2.imencode(".jpg", frame)
-            if not ret:
-                continue
-
-            img_b64 = base64.b64encode(buffer).decode("utf-8")
-            self.image_display.src_base64 = img_b64
-            self.page.update()
-
-            time.sleep(0.1)  # Small delay to prevent overwhelming the UI
+            time.sleep(0.015)  # Frame pacing for smooth ~35-40 FPS
 
         cap.release()
-        
-        # Stop sound worker
-        self.stop_sound_flag.set()
-        if self.sound_thread and self.sound_thread.is_alive():
-            self.sound_thread.join(timeout=1.0)
-        
-        self.update_status_text("Camera stopped.")
-        time.sleep(3)
-        self.update_status_text("Click a button to begin.")
+        self.sound_service.stop()
+        self.image_display.src_base64 = ""
+        self.video_container.content = self.camera_placeholder
+        self.update_status_text("Camera stopped. Ready.", is_active=False)
+        self.page.update()
+        logger.info("Webcam pipeline stopped.")
 
     def start_camera_click(self, e):
-        """Handle start/stop camera button click"""
+        """Handle Start/Stop Camera toggle."""
         if not self.camera_running:
             self.stop_camera_flag.clear()
             self.camera_running = True
             self.start_button.text = "Stop Camera"
+            self.start_button.icon = ft.icons.VIDEOCAM_OFF
             self.page.update()
-            threading.Thread(target=self.start_camera, daemon=True).start()
+
+            self.stream_thread = threading.Thread(target=self._camera_capture_and_render_loop, daemon=True)
+            self.stream_thread.start()
         else:
             self.stop_camera_flag.set()
             self.camera_running = False
             self.start_button.text = "Start Camera"
-            self.image_display.src_base64 = ""  # Clear image on stop
-            self.stop_camera_flag.set()
-            self.stop_sound_flag.set()
-            
-            # Clean up sound queue
-            while not self.sound_queue.empty():
-                try:
-                    self.sound_queue.get_nowait()
-                except:
-                    break
+            self.start_button.icon = ft.icons.VIDEOCAM
+            self.video_container.content = self.camera_placeholder
+            self.image_display.src_base64 = ""
             self.page.update()
 
-    def add_face_click(self, e):
-        """Handle add face button click"""
-        if self.camera_running:
-            self.update_status_text("Please stop the camera before adding a new face.")
+    def take_snapshot_click(self, e):
+        """Manually save a high-resolution snapshot from the live camera stream."""
+        if not self.camera_running or self.latest_raw_frame is None:
+            snack = ft.SnackBar(content=ft.Text("Please start the camera before taking a snapshot."), bgcolor=ft.colors.ERROR)
+            self.page.overlay.append(snack)
+            snack.open = True
+            self.page.update()
             return
-        
-        self.page.dialog = self.add_dialog
-        self.add_dialog.open = True
+
+        frame_to_save = None
+        with self.frame_lock:
+            if self.latest_raw_frame is not None:
+                frame_to_save = self.latest_raw_frame.copy()
+
+        if frame_to_save is not None:
+            success, path = self.activity_logger.save_manual_snapshot(frame_to_save)
+            snack = ft.SnackBar(
+                content=ft.Text(f"Snapshot saved: {os.path.basename(path)}"),
+                bgcolor=ft.colors.GREEN if success else ft.colors.ERROR,
+                action="Open Folder" if success else None,
+                on_action=lambda _: os.startfile(os.path.abspath(self.activity_logger.snapshots_dir)) if os.name == 'nt' else None
+            )
+            self.page.overlay.append(snack)
+            snack.open = True
+            self.page.update()
+
+    def add_face_click(self, e=None):
+        """Open Add Face dialog for webcam capture."""
+        if self.camera_running:
+            self.update_status_text("Please stop the live camera before enrolling via webcam.")
+            return
+
+        self.name_input_to_add.value = ""
+        self.page.open(self.add_dialog)
         self.page.update()
 
     def close_add_dialog(self, e):
-        # Close the dialog and return to the previous window
         self.name_input_to_add.value = ""
-        self.add_dialog.open = False
+        self.page.close(self.add_dialog)
         self.page.update()
 
     def submit_adding(self, e):
-        """
-        Function for submit adding new face to db
-        """
-        # Close the dialog
-        self.add_dialog.open = False
+        """Enroll face through webcam capture."""
+        self.page.close(self.add_dialog)
         self.page.update()
 
+        name = self.name_input_to_add.value.strip() or None
         self.update_status_text("Capturing face... Please look at the camera.")
-        
-        # Get the name from input field
-        name = self.name_input_to_add.value.strip() if self.name_input_to_add.value.strip() else None
-        
-        ## TODO - Must to write name(no optional). Add check if self.name_input.value is not empty string.
 
-        # Use business logic to add face
-        try:
-            success, message = self.face_adder.capture_and_add_face(
-                name=name,
-                known_encodings=self.known_face_encodings, 
-                known_names=self.known_face_names
-            )
-            
+        def _do_add():
+            success, message = self.face_manager.capture_and_add_face(name=name)
             self.update_status_text(message)
-
             if success:
-                # Update UI elements
+                self.gallery_view.refresh()
                 self.update_face_count()
 
-            # Clear name input
-            self.name_input_to_add.value = ""
-            self.page.update()
+        threading.Thread(target=_do_add, daemon=True).start()
 
-            time.sleep(3)
-            self.update_status_text("Click a button to begin.")
-                
-        except Exception as e:
-            self.update_status_text(f"Error adding face: {str(e)}")
-
-
-    def delete_face_click(self, e):
-        """
-        Opening delete dialog for submit a name of face to delete from db
-        """
-        self.page.dialog = self.delete_dialog
-        self.delete_dialog.open = True
-        self.page.update()
-
-    def close_delete_dialog(self, e):
-        # Close the dialog and return to the previous window
-        self.name_input_to_delete.value = ""
-        self.delete_dialog.open = False
-        self.page.update()
-
-    def submit_deleting(self, e):
-        """
-        Submit deleting known face from db
-        """
-        # Close the dialog
-        self.delete_dialog.open = False
-        self.page.update()
-
-        name_to_delete = self.name_input_to_delete.value.strip()
-
-        if not name_to_delete:
-            self.status_text.value = "You must enter a name!!!"
-            self.page.update()
+    def open_delete_dropdown_dialog(self, e):
+        """Open delete dialog populated with dropdown of all known face names."""
+        known_names = self.face_manager.list_known_faces()
+        if not known_names:
+            self.update_status_text("No registered faces in database to delete.")
             return
-        
-        # Call delete function from bussiness_logic
-        success, message = self.face_adder.delete_face(
-            name=name_to_delete,
-            known_encodings=self.known_face_encodings,
-            known_names=self.known_face_names
-        )
-        self.status_text.value = message
-        self.page.update()
-        
-        if success:
-            self.update_face_count()
-        
-        time.sleep(3)
 
-        # Reset name_input_to_delete value
-        self.name_input_to_delete.value = ""
-        self.update_status_text("Click a button to begin.")
+        self.delete_dropdown.options = [ft.dropdown.Option(name) for name in known_names]
+        self.delete_dropdown.value = known_names[0]
+        self.page.open(self.delete_dropdown_dialog)
+        self.page.update()
+
+    def close_delete_dropdown_dialog(self, e):
+        self.page.close(self.delete_dropdown_dialog)
+        self.page.update()
+
+    def submit_dropdown_deleting(self, e):
+        """Delete selected person from dropdown."""
+        selected_name = self.delete_dropdown.value
+        self.page.close(self.delete_dropdown_dialog)
+        self.page.update()
+
+        if not selected_name:
+            return
+
+        success, message = self.face_manager.delete_face_by_name(selected_name)
+        self.update_status_text(message)
+        if success:
+            self.gallery_view.refresh()
+            self.update_face_count()
 
     def on_window_event(self, e: ft.WindowEvent):
-        """Handle window events"""
+        """Handle window close event and clean shutdown."""
         if e.data == "close":
             self.stop_camera_flag.set()
             self.camera_running = False
-            # Save faces before closing using business logic
+            self.sound_service.stop()
             try:
-                self.face_adder.save_known_faces(self.known_face_encodings, self.known_face_names)
+                self.face_manager.save_known_faces()
             except Exception as ex:
-                print(f"Error saving faces on close: {ex}")
-    
-    def open_help_dialog(self, e):
-        self.instructions_dialog.open = True
-        self.page.dialog = self.instructions_dialog
-        self.page.update()
-
-    def info_text(self):
-        return ft.Column([
-            ft.Text("Instructions:", weight="bold", selectable=True),
-            ft.Text("• Start Camera: Begin face recognition", size=14, selectable=True),
-            ft.Text("• Add new Face: Capture and save a new face", size=14, selectable=True),
-            ft.Text("• Delete known face: Enter the name you want to delete from db", size=14, selectable=True),
-            ft.Text("• Green box = Recognized, Red box = Unknown", size=14, selectable=True),
-        ])
-    
-    def close_help_dialog(self, e):
-        self.instructions_dialog.open = False
-        self.page.update()
+                logger.error(f"Error saving faces on window close: {ex}")
